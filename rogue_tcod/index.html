@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rt2026</title>
+  <link rel="stylesheet" href="shell.css">
+</head>
+<body>
+  <header class="site-header">
+    <nav aria-label="Page sections">
+      <a href="#play">Game</a>
+      <a href="#database">Database</a>
+      <a href="#controls">Controls</a>
+      <a href="#ql-reference">QL reference</a>
+    </nav>
+  </header>
+
+  <main class="page">
+    <section id="play" class="section">
+      <div class="section-heading"><h1>Rogue</h1></div>
+      <div id="game">
+        <canvas id="canvas" width="1280" height="800" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+      </div>
+      <p class="game-hint">Click the game to enable keyboard input.</p>
+    </section>
+
+    <section id="database" class="section">
+      <div class="section-heading">
+        <h2>Live game database</h2>
+        <p>Inspect or edit the current game state with RED QL.</p>
+      </div>
+      <form id="toolbar" autocomplete="off">
+        <input id="ql-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="DLIST" aria-label="Database command">
+        <button type="submit">Run</button>
+        <button id="refresh" type="button">Refresh tables</button>
+      </form>
+      <pre id="ql-output" aria-live="polite">Start a game to inspect its database.</pre>
+      <p id="database-status">Browser console: <code>ql("DLIST")</code></p>
+      <div id="tables"></div>
+    </section>
+
+    <div class="two-column">
+      <section id="controls" class="section">
+        <div class="section-heading"><h2>Controls</h2></div>
+        <div class="cards">
+          <article class="card">
+            <h3>Game</h3>
+            <dl class="bindings">
+              <dt><kbd>WASD</kbd> / arrows</dt><dd>Move or bump attack</dd>
+              <dt><kbd>E</kbd></dt><dd>Pick up item</dd>
+              <dt><kbd>Space</kbd></dt><dd>Wait one turn</dd>
+              <dt><kbd>I</kbd></dt><dd>Open inventory</dd>
+              <dt><kbd>V</kbd></dt><dd>Message history</dd>
+              <dt><kbd>/</kbd></dt><dd>Look around</dd>
+              <dt><kbd>Esc</kbd></dt><dd>Pause</dd>
+            </dl>
+          </article>
+          <article class="card">
+            <h3>Inventory &amp; targeting</h3>
+            <dl class="bindings">
+              <dt><kbd>A-Z</kbd></dt><dd>Select an item</dd>
+              <dt><kbd>U</kbd> / <kbd>E</kbd> / <kbd>Enter</kbd></dt><dd>Use selected item</dd>
+              <dt><kbd>D</kbd></dt><dd>Drop selected item</dd>
+              <dt><kbd>WASD</kbd> / arrows</dt><dd>Move target cursor</dd>
+              <dt><kbd>Enter</kbd> / click</dt><dd>Confirm target</dd>
+              <dt><kbd>Esc</kbd></dt><dd>Cancel or go back</dd>
+            </dl>
+          </article>
+          <article class="card">
+            <h3>Menus &amp; history</h3>
+            <dl class="bindings">
+              <dt><kbd>W/S</kbd> / arrows</dt><dd>Navigate menus</dd>
+              <dt><kbd>E</kbd> / <kbd>Enter</kbd></dt><dd>Activate menu item</dd>
+              <dt><kbd>Up/Down</kbd></dt><dd>Scroll one message</dd>
+              <dt><kbd>PgUp/PgDn</kbd></dt><dd>Scroll ten messages</dd>
+              <dt><kbd>Home/End</kbd></dt><dd>Jump to history edge</dd>
+            </dl>
+          </article>
+          <article class="card">
+            <h3>Debug overlays</h3>
+            <dl class="bindings">
+              <dt><kbd>F1</kbd></dt><dd>Reveal map / full light</dd>
+              <dt><kbd>F2</kbd></dt><dd>Alphabet test</dd>
+              <dt><kbd>F3</kbd></dt><dd>Font atlas test</dd>
+              <dt><kbd>F4</kbd></dt><dd>Flow field</dd>
+              <dt><kbd>F5</kbd></dt><dd>Path costs</dd>
+              <dt><kbd>F6</kbd></dt><dd>Path to mouse</dd>
+            </dl>
+          </article>
+        </div>
+      </section>
+
+      <section id="ql-reference" class="section">
+        <div class="section-heading">
+          <h2>RED QL command reference</h2>
+          <p>Inspect and modify entities, links, properties, tables, and the database.</p>
+          <p>Example: ESET items 666 x 39 y 35 base -7</p>
+          <p>Spawns a health potion</p>
+        </div>
+        <div class="callout">
+          Run commands above or from the browser console with <code>ql("DLIST")</code>.
+          Write commands change the live game state.
+        </div>
+        <div id="command-reference"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="shell.js"></script>
+  <script async type="text/javascript" src="index.js"></script>
+</body>
+</html>
