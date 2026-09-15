@@ -20,11 +20,7 @@ function fitCanvas() {
 
 function runQL(command, logResult = true) {
   if (!runtimeReady) return 'ERR runtime not ready';
-  let response = '';
-  const previousHandler = Module.onDatabaseMessage;
-  Module.onDatabaseMessage = value => { response = value; };
-  Module.ccall('GameDatabase_Command', null, ['string'], [command]);
-  Module.onDatabaseMessage = previousHandler;
+  const response = Module.ccall('RED_CLI_Command', 'string', ['string'], [command]);
   if (logResult) console.log(`> ${command}\n${response}`);
   return response;
 }
@@ -57,6 +53,51 @@ function appendCell(row, tag, value) {
   const cell = document.createElement(tag);
   cell.textContent = value;
   row.append(cell);
+}
+
+// Colours are packed RGBA u32s, Render those as 0xRRGGBBAA
+const kColorColumns = new Set(['fg', 'bg', 'color']);
+function formatCell(column, value) {
+  if (value === undefined || value === '') return '';
+  if (!kColorColumns.has(column)) return String(value);
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value); // already 0x… or non-numeric
+  return '0x' + (n >>> 0).toString(16).toUpperCase().padStart(8, '0');
+}
+
+// Double-click a value cell to edit it in place; Enter commits via ESET,
+// Escape or blur reverts. entityID is the row id (negative for an archetype),
+// which ESET accepts directly.
+function makeEditable(td, tableName, entityID, column) {
+  td.title = 'Double-click to edit';
+  td.addEventListener('dblclick', () => {
+    if (td.isContentEditable) return;
+    const original = td.textContent;
+    td.contentEditable = 'true';
+    td.classList.add('editing');
+    td.focus();
+    const commit = () => {
+      const value = td.textContent.trim();
+      finish();
+      if (value === original) return;
+      const response = runQL(`ESET ${tableName} ${entityID} ${column} ${value}`);
+      if (response.startsWith('ERR')) { td.textContent = original; }
+      refreshTables();
+    };
+    const cancel = () => { td.textContent = original; finish(); };
+    const finish = () => {
+      td.contentEditable = 'false';
+      td.classList.remove('editing');
+      td.removeEventListener('keydown', onKey);
+      td.removeEventListener('blur', cancel);
+    };
+    const onKey = event => {
+      if (event.key === 'Enter') { event.preventDefault(); commit(); }
+      else if (event.key === 'Escape') { event.preventDefault(); cancel(); }
+    };
+    td.addEventListener('keydown', onKey);
+    td.addEventListener('blur', cancel);
+  });
 }
 
 function renderDatabaseTable(tableName, columns, instances, archetypes, links) {
@@ -96,7 +137,6 @@ function renderDatabaseTable(tableName, columns, instances, archetypes, links) {
   const table = document.createElement('table');
   const head = document.createElement('thead');
   const heading = document.createElement('tr');
-  appendCell(heading, 'th', 'kind');
   appendCell(heading, 'th', 'id');
   for (const column of columns) appendCell(heading, 'th', column);
   head.append(heading);
@@ -105,10 +145,67 @@ function renderDatabaseTable(tableName, columns, instances, archetypes, links) {
   const body = document.createElement('tbody');
   const archetypeMap = new Map(archetypes.map(arch => [String(arch.id), arch]));
 
+  // A floating overlay showing the hovered instance's base chain
+  const overlay = document.createElement('table');
+  overlay.className = 'archetype-overlay';
+  overlay.hidden = true;
+  const overlayBody = document.createElement('tbody');
+  overlay.append(overlayBody);
+  const baseIdOf = entry => entry && (entry.values['base'] || entry.values['archetype']);
+  const baseChain = entry => {
+    const chain = [];
+    const seen = new Set();
+    let id = baseIdOf(entry);
+    while (id && archetypeMap.has(String(id)) && !seen.has(String(id)))
+    {
+      seen.add(String(id));
+      const arch = archetypeMap.get(String(id));
+      chain.push(arch);
+      id = baseIdOf(arch);
+    }
+    return chain;
+  };
+  const buildRow = entry => {
+    const tr = document.createElement('tr');
+    tr.className = entry.kind;
+    appendCell(tr, 'td', entry.id);
+    for (const column of columns)
+    {
+      appendCell(tr, 'td', formatCell(column, entry.values[column]));
+    }
+    return tr;
+  };
+  const showPinned = (entry, hoveredTr) => {
+    const chain = baseChain(entry);
+    if (!chain.length) return;
+    overlayBody.replaceChildren(...chain.map(buildRow));
+    // Match the hovered row's column widths so the overlay lines up.
+    const srcCells = hoveredTr.children;
+    for (const tr of overlayBody.children)
+    {
+      [...tr.children].forEach((td, i) => {
+        if (srcCells[i]) td.style.width = `${srcCells[i].getBoundingClientRect().width}px`;
+      });
+    }
+    overlay.hidden = false;
+    // Place above the hovered row; if it would overflow the top, place below.
+    const scrollRect = scroll.getBoundingClientRect();
+    const rowRect = hoveredTr.getBoundingClientRect();
+    const overlayH = overlay.getBoundingClientRect().height;
+    let top = rowRect.top - scrollRect.top + scroll.scrollTop - overlayH;
+    if (rowRect.top - overlayH < scrollRect.top)
+    {
+      top = rowRect.bottom - scrollRect.top + scroll.scrollTop;
+    }
+    overlay.style.top = `${top}px`;
+    overlay.style.left = `${scroll.scrollLeft}px`;
+  };
+  const clearPinned = () => { overlay.hidden = true; };
+
   if (!rows.length) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = columns.length + 2;
+    td.colSpan = columns.length + 1;
     td.className = 'empty';
     td.textContent = 'Table schema defined (no rows present).';
     tr.append(td);
@@ -124,7 +221,6 @@ function renderDatabaseTable(tableName, columns, instances, archetypes, links) {
         if (baseId) tr.dataset.baseId = baseId;
       }
 
-      appendCell(tr, 'td', row.kind);
       appendCell(tr, 'td', row.id);
 
       for (const column of columns) {
@@ -141,18 +237,20 @@ function renderDatabaseTable(tableName, columns, instances, archetypes, links) {
           }
         }
 
-        td.textContent = val ?? '';
+        td.textContent = formatCell(column, val);
+        // Double-click to edit; Enter fires an ESET, Escape/blur cancels.
+        makeEditable(td, tableName, row.id, column);
         tr.append(td);
       }
 
       if (row.kind === 'instance' && tr.dataset.baseId) {
         tr.addEventListener('mouseenter', () => {
           tr.classList.add('highlight-instance');
-          table.querySelector(`tr.archetype[data-id="${tr.dataset.baseId}"]`)?.classList.add('highlight-archetype');
+          showPinned(row, tr);
         });
         tr.addEventListener('mouseleave', () => {
           tr.classList.remove('highlight-instance');
-          table.querySelector(`tr.archetype[data-id="${tr.dataset.baseId}"]`)?.classList.remove('highlight-archetype');
+          clearPinned();
         });
       }
 
@@ -162,20 +260,9 @@ function renderDatabaseTable(tableName, columns, instances, archetypes, links) {
 
   table.append(body);
   scroll.append(table);
+  scroll.append(overlay);
   details.append(scroll);
   return details;
-}
-
-function linkValues(response) {
-  if (!response || response.startsWith('ERR') || response === '(empty)') return [];
-  return response.trim().split(/\r?\n/).map((line, index) => {
-    const [source, flavor, target] = line.trim().split(/\s+/);
-    return {
-      kind: 'link',
-      id: String(index + 1),
-      values: { source, flavor, target }
-    };
-  });
 }
 
 function refreshTables() {
@@ -198,8 +285,9 @@ function refreshTables() {
     const columns = words(runQL(`TLIST ${tableName}`, false));
     const rowIds = words(runQL(`TROWS ${tableName}`, false));
     const archetypeIds = words(runQL(`TARCH ${tableName}`, false));
-    const bLinkTable = ['source', 'flavor', 'target'].every(column => columns.includes(column));
-    const links = bLinkTable ? linkValues(runQL(`LGETALL ${tableName}`, false)) : [];
+    // Link rows are real table rows now, so TROWS already returns them; a
+    // separate LGETALL would list the same rows a second time.
+    const links = [];
     const instances = rowIds.map(rowId => ({
       kind: 'instance',
       id: rowId,
@@ -245,7 +333,17 @@ const commandGroups = [
     ['DLIST', 'DLIST'],
     ['DSTATS', 'DSTATS'],
     ['DTRACE', 'DTRACE <on|off>'],
+    ['DSAVE', 'DSAVE <name> [csv|json]'],
+    ['DLOAD', 'DLOAD <name> [csv|json]'],
     ['DCLEAR', 'DCLEAR']
+  ]],
+  ['Channel', [
+    ['CSUB', 'CSUB <entityID> <channel> [<channel>…]'],
+    ['CUSUB', 'CUSUB <entityID> [<channel>…]'],
+    ['CPUB', 'CPUB <entityID> <channel> <message>'],
+    ['CNUMSUB', 'CNUMSUB <channel>'],
+    ['CLIST', 'CLIST'],
+    ['CRECV', 'CRECV <entityID>']
   ]]
 ];
 
@@ -296,7 +394,7 @@ var Module = {
       refreshTables();
       return response;
     };
-    //fitCanvas();
+    fitCanvas();
     refreshTables();
   }
 };

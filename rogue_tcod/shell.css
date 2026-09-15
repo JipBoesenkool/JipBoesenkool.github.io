@@ -118,7 +118,7 @@ button:hover { border-color: #77778a; background: #24242d; }
 }
 
 .row-count { margin-left: .5rem; color: #858593; font-size: .75rem; }
-.table-scroll { max-height: 32rem; overflow: auto; border-top: 1px solid #30303a; }
+.table-scroll { position: relative; max-height: 32rem; overflow: auto; border-top: 1px solid #30303a; }
 table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: .78rem; }
 
 th, td {
@@ -131,11 +131,24 @@ th, td {
   overflow-wrap: anywhere;
 }
 
-th { position: sticky; z-index: 1; top: 0; background: #202028; color: #f5e65a; }
+th { position: sticky; z-index: 2; top: 0; background: #202028; color: #f5e65a; }
 td { max-width: 28rem; color: #c7c7d1; }
 tbody tr:nth-child(even) { background: #14141a; }
 tbody tr.archetype { background: #151a24; }
 tbody tr.link { background: #182018; }
+/* Base chain of the hovered instance, pinned under the sticky header. */
+.archetype-overlay {
+  position: absolute;
+  z-index: 3;
+  border-collapse: collapse;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .6);
+  pointer-events: none;
+}
+.archetype-overlay td {
+  background: #151a24; /* same as a normal archetype row */
+  border: 1px solid #30303a;
+}
+td.editing { outline: 2px solid #f5e65a; background: #2a2a1a; cursor: text; }
 .empty { padding: .75rem; color: #858593; }
 
 .two-column {
