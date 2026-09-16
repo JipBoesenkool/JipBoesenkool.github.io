@@ -92,6 +92,7 @@ function makeEditable(td, tableName, entityID, column) {
       td.removeEventListener('blur', cancel);
     };
     const onKey = event => {
+      event.stopPropagation();
       if (event.key === 'Enter') { event.preventDefault(); commit(); }
       else if (event.key === 'Escape') { event.preventDefault(); cancel(); }
     };
@@ -267,6 +268,9 @@ function renderDatabaseTable(tableName, columns, instances, archetypes, links) {
 
 function refreshTables() {
   if (!runtimeReady) return;
+  const openTables = new Set(
+    [...tables.querySelectorAll('.db-table[open]')].map(details => details.dataset.table)
+  );
   const listResponse = runQL('DLIST', false);
   const tableNames = words(listResponse);
   tables.replaceChildren();
@@ -301,7 +305,10 @@ function refreshTables() {
     totalInstances += instances.length;
     totalArchetypes += archetypes.length;
     totalLinks += links.length;
-    tables.append(renderDatabaseTable(tableName, columns, instances, archetypes, links));
+    const details = renderDatabaseTable(tableName, columns, instances, archetypes, links);
+    details.dataset.table = tableName;
+    details.open = openTables.has(tableName);
+    tables.append(details);
   }
   databaseStatus.textContent = `${tableNames.length} tables · ${totalInstances} instances · ${totalArchetypes} archetypes · ${totalLinks} links · browser console: ql("DLIST")`;
 }
